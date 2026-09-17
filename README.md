@@ -1,34 +1,107 @@
-# node-skeleton
+# @99linesofcode/opencode-socket-plugin
 
-The starting point for my Node.js/TypeScript packages. It builds on
-[git-skeleton](https://github.com/99linesofcode/git-skeleton) for the shared
-configuration (`.editorconfig`, `.prettierrc`, `.gitignore`, `.ignore`) and
-adds the Node/TypeScript toolchain: TypeScript (ESM, NodeNext), vitest, and
-eslint with prettier.
+Expose the active opencode session over a Unix domain socket. The plugin runs
+inside the opencode process (TUI or server) and binds a Unix socket that
+proxies the opencode HTTP API — session prompt, messages, SSE events — so
+other processes (systemd services, bridges, watchers) can inject into and
+watch the live session **without needing `opencode serve`**.
 
-## How to use
+## Install
 
-1. `git init`
-2. `git remote add origin <REPOSITORY>`
-3. `git remote add skeleton git@github.com:99linesofcode/node-skeleton.git`
-4. `git fetch skeleton`
-5. `git rebase skeleton/main`
+Add the package to your opencode config:
 
-Updates flow the same way: `git fetch skeleton && git rebase skeleton/main`.
-Conflicts on rebase are the divergence points — resolve them by keeping your
-repo's override where it differs from the shared default.
+```json
+{
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": ["@99linesofcode/opencode-socket-plugin"]
+}
+```
 
-## Commands
+opencode installs npm plugins automatically with Bun at startup.
+
+## Usage
+
+Once loaded, the plugin binds a socket at:
+
+- `$OPENCODE_SOCKET_PATH` if set, else
+- `$XDG_RUNTIME_DIR/opencode.sock` (default), else
+- `/tmp/opencode.sock`
+
+Talk to it with any HTTP client over the Unix socket:
 
 ```bash
-pnpm install      # install dependencies
-pnpm build        # compile TypeScript to build/
-pnpm dev          # watch and recompile on change
-pnpm test         # run the test suite once
-pnpm test:watch   # run the test suite in watch mode
-pnpm lint         # eslint (flat config + prettier)
-pnpm typecheck    # type-check without emitting
-pnpm audit        # check dependencies for known vulnerabilities
+# Health
+curl --unix-socket /run/user/1000/opencode.sock http://localhost/global/health
+
+# Active session
+curl --unix-socket /run/user/1000/opencode.sock http://localhost/session/active
+
+# Inject a prompt into the active session (blocking — waits for the reply)
+curl --unix-socket /run/user/1000/opencode.sock \
+  -X POST http://localhost/session/<id>/message \
+  -H 'Content-Type: application/json' \
+  -d '{"parts":[{"type":"text","text":"Hello from the bridge"}]}'
+
+# Fire-and-forget injection
+curl --unix-socket /run/user/1000/opencode.sock \
+  -X POST http://localhost/session/<id>/prompt_async \
+  -H 'Content-Type: application/json' \
+  -d '{"parts":[{"type":"text","text":"Hello"}]}'
+
+# Watch events in real time (SSE)
+curl --unix-socket /run/user/1000/opencode.sock -N http://localhost/event
+```
+
+## API
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/global/health` | Health check |
+| GET | `/session` | List sessions |
+| GET | `/session/active` | Most recently updated session in the plugin's directory |
+| GET | `/session/:id` | Get a session |
+| GET | `/session/:id/message` | List messages in a session |
+| GET | `/session/:id/message/:messageID` | Get a message |
+| POST | `/session/:id/message` | Send a prompt (blocking, returns the reply) |
+| POST | `/session/:id/prompt_async` | Send a prompt (fire-and-forget) |
+| POST | `/session/:id/command` | Run a slash command |
+| POST | `/session/:id/abort` | Abort a running session |
+| POST | `/session/:id/permissions/:permissionID` | Reply to a permission request |
+| GET | `/event` | SSE stream of bus events (`?session=<id>` to filter) |
+
+## Configuration
+
+The socket path can be set via plugin options:
+
+```json
+{
+  "plugin": [["@99linesofcode/opencode-socket-plugin", { "socketPath": "/run/user/1000/opencode.sock" }]]
+}
+```
+
+or via the `OPENCODE_SOCKET_PATH` environment variable.
+
+## Notes
+
+- The socket lives and dies with the opencode process. No TUI/server running,
+  no socket.
+- The socket is mode 0600, user-owned — filesystem permissions are the only
+  auth (same trust model as the TUI itself).
+- Never `console.log` from this plugin — it runs inside the TUI process and
+  stdout writes overlay the terminal UI. Logging goes through
+  `client.app.log()`.
+
+## Development
+
+```bash
+bun install       # install dependencies
+bun run build     # compile TypeScript to build/
+bun run dev       # watch and recompile on change
+bun run test      # run the test suite once
+bun run test:watch # run the test suite in watch mode
+bun run lint      # eslint (flat config + prettier)
+bun run typecheck # type-check without emitting
+bun run audit     # check dependencies for known vulnerabilities
 ```
 
 ## Contributing
