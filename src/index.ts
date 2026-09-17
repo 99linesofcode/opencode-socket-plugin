@@ -1,27 +1,26 @@
 // @99linesofcode/opencode-socket-plugin
 //
 // Composition root. This is the only file that knows how the pieces fit
-// together: it resolves the socket path, clears a stale socket, builds the
-// route table and the dispatcher, starts the Unix socket server, and returns
-// the dispose hook. Each piece lives in its own module with a single
-// responsibility — config, socket lifecycle, HTTP mapping, routing, and the
-// session API.
+// together: it resolves the socket path, clears a stale socket, builds the SSE
+// hub, the route table, and the dispatcher, starts the Unix socket server, and
+// returns the event/dispose hooks. Each piece lives in its own module with a
+// single responsibility — config, socket lifecycle, HTTP mapping, routing, the
+// session API, and the SSE hub.
 //
 // NOTE: never use console.log/error in this plugin — it runs inside the TUI
 // process, so stdout writes get overlaid on the terminal UI. Use
 // client.app.log() for structured logging (goes to the log file).
 
-import { type Hooks, type PluginModule } from '@opencode-ai/plugin';
+import { type PluginModule } from '@opencode-ai/plugin';
 import { resolveSocketPath } from './config.js';
 import { clearStaleSocket, removeSocketFile } from './socket.js';
 import { createRouter } from './router.js';
 import { createRoutes } from './routes.js';
+import { createSseHub } from './sse.js';
 
 export const opencodeSocketPlugin: PluginModule = {
   id: 'opencode-socket-plugin',
-  // The runtime calls dispose on shutdown; the 1.15 plugin types don't
-  // declare it, so the return type carries the intersection explicitly.
-  server: async ({ client, directory }, options): Promise<Hooks & { dispose?(): Promise<void> }> => {
+  server: async ({ client, directory }, options) => {
     const socketPath = resolveSocketPath(options ?? {});
 
     const ok = await clearStaleSocket(socketPath);
@@ -52,7 +51,8 @@ export const opencodeSocketPlugin: PluginModule = {
       }
     }
 
-    const routes = createRoutes({ client, directory });
+    const sseHub = createSseHub();
+    const routes = createRoutes({ client, directory }, sseHub);
     const router = createRouter(routes, (message) =>
       client.app
         .log({
@@ -61,10 +61,16 @@ export const opencodeSocketPlugin: PluginModule = {
         .catch(() => {}),
     );
 
+    // idleTimeout must exceed the SSE heartbeat (10s). Bun's default 10s
+    // timeout closes the SSE stream whenever the heartbeat races it, and a
+    // per-request server.timeout() gets reset by concurrent traffic — only
+    // the global option holds under load. Cast: bun-types 1.4.0 types
+    // idleTimeout as undefined on the XOR union, but the runtime accepts it.
     const server = Bun.serve({
       unix: socketPath,
       fetch: router,
-    });
+      idleTimeout: 60,
+    } as unknown as Bun.Serve.Options<undefined, never>);
 
     await client.app
       .log({
@@ -77,17 +83,23 @@ export const opencodeSocketPlugin: PluginModule = {
       .catch(() => {});
 
     return {
+      // Forward every bus event for this directory to connected SSE clients.
+      event: async ({ event }) => {
+        sseHub.broadcast(event);
+      },
       async dispose() {
-        disposeServer(server, socketPath);
+        disposeServer(sseHub, server, socketPath);
       },
     };
   },
 };
 
 function disposeServer(
+  sseHub: ReturnType<typeof createSseHub>,
   server: { stop(force?: boolean): void },
   socketPath: string,
 ): void {
+  sseHub.close();
   try {
     server.stop(true);
   } catch {

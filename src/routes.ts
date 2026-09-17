@@ -7,6 +7,7 @@
 import { type PluginInput } from '@opencode-ai/plugin';
 import { sdkResultToResponse } from './http.js';
 import { param, type Route } from './router.js';
+import { type SSEHub } from './sse.js';
 
 export type PluginClient = PluginInput['client'];
 
@@ -15,7 +16,10 @@ export type ServerContext = {
   directory: string;
 };
 
-export function createRoutes({ client, directory }: ServerContext): Route[] {
+export function createRoutes(
+  { client, directory }: ServerContext,
+  sseHub: SSEHub,
+): Route[] {
   return [
     {
       method: 'GET',
@@ -134,6 +138,11 @@ export function createRoutes({ client, directory }: ServerContext): Route[] {
             >,
           }),
         ),
+    },
+    {
+      method: 'GET',
+      pattern: /^\/event$/,
+      handler: async (_params, _body, req) => sseHub.subscribe(req),
     },
   ];
 }
