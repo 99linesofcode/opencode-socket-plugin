@@ -70,5 +70,70 @@ export function createRoutes({ client, directory }: ServerContext): Route[] {
           }),
         ),
     },
+    {
+      method: 'POST',
+      pattern: /^\/session\/(?<id>[^/]+)\/message$/,
+      handler: async (params, body) =>
+        sdkResultToResponse(
+          await client.session.prompt({
+            path: { id: param(params, 'id') },
+            body: body as NonNullable<
+              Parameters<typeof client.session.prompt>[0]['body']
+            >,
+          }),
+        ),
+    },
+    {
+      method: 'POST',
+      pattern: /^\/session\/(?<id>[^/]+)\/prompt_async$/,
+      handler: async (params, body) =>
+        sdkResultToResponse(
+          await client.session.promptAsync({
+            path: { id: param(params, 'id') },
+            body: body as NonNullable<
+              Parameters<typeof client.session.promptAsync>[0]['body']
+            >,
+          }),
+        ),
+    },
+    {
+      method: 'POST',
+      pattern: /^\/session\/(?<id>[^/]+)\/command$/,
+      handler: async (params, body) =>
+        sdkResultToResponse(
+          await client.session.command({
+            path: { id: param(params, 'id') },
+            body: body as NonNullable<
+              Parameters<typeof client.session.command>[0]['body']
+            >,
+          }),
+        ),
+    },
+    {
+      method: 'POST',
+      pattern: /^\/session\/(?<id>[^/]+)\/abort$/,
+      handler: async (params) =>
+        sdkResultToResponse(
+          await client.session.abort({ path: { id: param(params, 'id') } }),
+        ),
+    },
+    {
+      method: 'POST',
+      pattern: /^\/session\/(?<id>[^/]+)\/permissions\/(?<permissionID>[^/]+)$/,
+      handler: async (params, body) =>
+        sdkResultToResponse(
+          await client.postSessionIdPermissionsPermissionId({
+            path: {
+              id: param(params, 'id'),
+              permissionID: param(params, 'permissionID'),
+            },
+            body: body as NonNullable<
+              Parameters<
+                typeof client.postSessionIdPermissionsPermissionId
+              >[0]['body']
+            >,
+          }),
+        ),
+    },
   ];
 }
