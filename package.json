@@ -1,11 +1,32 @@
 {
-  "name": "node-skeleton",
-  "version": "1.0.0",
-  "description": "",
+  "name": "@99linesofcode/opencode-socket-plugin",
+  "version": "0.1.0",
+  "description": "Expose the active opencode session over a Unix domain socket. Proxies the opencode HTTP API (session prompt, messages, SSE events) so other processes can inject into and watch the live TUI session.",
   "type": "module",
-  "main": "build/index.mjs",
+  "license": "MIT",
+  "author": "Jordy Schreuders <99linesofcode@gmail.com>",
+  "keywords": [
+    "opencode",
+    "plugin",
+    "unix-socket",
+    "socket",
+    "sse",
+    "session",
+    "bridge"
+  ],
+  "exports": {
+    ".": {
+      "import": "./build/index.js",
+      "types": "./build/index.d.ts"
+    },
+    "./server": {
+      "import": "./build/index.js",
+      "types": "./build/index.d.ts"
+    }
+  },
   "files": [
-    "build"
+    "build",
+    "README.md"
   ],
   "scripts": {
     "dev": "tsc -w",
@@ -14,22 +35,29 @@
     "test:watch": "vitest",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "audit": "pnpm audit"
+    "audit": "bun audit",
+    "prepublishOnly": "bun run build"
   },
-  "keywords": [],
-  "author": "Jordy Schreuders <99linesofcode@gmail.com>",
-  "license": "MIT",
-  "engines": {
-    "node": ">=22"
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.15.0"
   },
   "devDependencies": {
+    "@opencode-ai/plugin": "1.15.10",
+    "@opencode-ai/sdk": "^1.15.10",
     "@tsconfig/node22": "^22.0.6",
     "@types/node": "^22",
+    "bun-types": "^1.4.0",
     "eslint": "^10",
     "eslint-config-prettier": "^10",
     "prettier": "^3",
     "typescript": "^5",
     "typescript-eslint": "^8",
     "vitest": "^5"
+  },
+  "engines": {
+    "opencode": ">=1.15.0"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }
