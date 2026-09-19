@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { type Event } from '@opencode-ai/sdk';
-import { createSseHub } from '../src/sse.js';
+import { SseHub } from '../src/SseHub.js';
 
 function event(type: string, properties: Record<string, unknown>): Event {
   return { type, properties } as unknown as Event;
@@ -27,9 +27,9 @@ function dataPayload(frame: string): Record<string, unknown> {
   >;
 }
 
-describe('createSseHub', () => {
+describe("SseHub", () => {
   it('returns an event-stream response with a connected frame', async () => {
-    const hub = createSseHub();
+    const hub = new SseHub();
 
     const response = hub.subscribe(new Request('http://localhost/event'));
     const reader = bodyReader(response);
@@ -41,7 +41,7 @@ describe('createSseHub', () => {
   });
 
   it('forwards matching events as data frames', async () => {
-    const hub = createSseHub();
+    const hub = new SseHub();
     const reader = bodyReader(
       hub.subscribe(new Request('http://localhost/event')),
     );
@@ -55,7 +55,7 @@ describe('createSseHub', () => {
   });
 
   it('drops events for other sessions under a session filter', async () => {
-    const hub = createSseHub();
+    const hub = new SseHub();
     const reader = bodyReader(
       hub.subscribe(new Request('http://localhost/event?session=ses_1')),
     );
@@ -72,7 +72,7 @@ describe('createSseHub', () => {
   });
 
   it('forwards only the listed event types under an event filter', async () => {
-    const hub = createSseHub();
+    const hub = new SseHub();
     const reader = bodyReader(
       hub.subscribe(new Request('http://localhost/event?events=session.idle')),
     );
@@ -87,7 +87,7 @@ describe('createSseHub', () => {
   });
 
   it('reads the session id from the part before the info id', async () => {
-    const hub = createSseHub();
+    const hub = new SseHub();
     const reader = bodyReader(
       hub.subscribe(new Request('http://localhost/event?session=ses_1')),
     );
@@ -110,7 +110,7 @@ describe('createSseHub', () => {
   });
 
   it('drops events without a resolvable session id under a session filter', async () => {
-    const hub = createSseHub();
+    const hub = new SseHub();
     const reader = bodyReader(
       hub.subscribe(new Request('http://localhost/event?session=ses_1')),
     );

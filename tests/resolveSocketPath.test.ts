@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { resolveSocketPath } from '../src/config.js';
+import { resolveSocketPath } from '../src/resolveSocketPath.js';
 
 afterEach(() => {
   vi.unstubAllEnvs();

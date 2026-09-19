@@ -1,11 +1,9 @@
-// Unix socket file lifecycle.
-//
-// Single responsibility: own the socket file — detect a stale one left behind
-// by a dead process, and remove it on shutdown. A stale socket is one where
-// the owner is gone or unresponsive. connect() alone is not enough: a stopped
-// process's socket accepts connections at the kernel level but never serves
-// them, so we probe with a health request and treat "no response" as stale.
-
+// Unix socket file lifecycle. Own the socket file: detect a stale one left
+// behind by a dead process, and remove it on shutdown. A stale socket is one
+// where the owner is gone or unresponsive. connect() alone is not enough: a
+// stopped process's socket accepts connections at the kernel level but never
+// serves them, so we probe with a health request and treat "no response" as
+// stale.
 import { unlinkSync, existsSync } from 'node:fs';
 import net from 'node:net';
 

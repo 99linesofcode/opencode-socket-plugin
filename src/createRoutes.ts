@@ -1,13 +1,10 @@
-// The session API surface.
-//
-// Single responsibility: define the endpoints. Each route is a thin command
-// that proxies to the opencode SDK client. Adding an endpoint means adding a
-// route here — the dispatcher and the SDK calls stay untouched.
-
+// The session API surface. Each route is a thin command that proxies to the
+// opencode SDK client. Adding an endpoint means adding a route here — the
+// dispatcher and the SDK calls stay untouched.
 import { type PluginInput } from '@opencode-ai/plugin';
-import { sdkResultToResponse } from './http.js';
-import { param, type Route } from './router.js';
-import { type SSEHub } from './sse.js';
+import { sdkResultToResponse } from './sdkResultToResponse.js';
+import { param, type Route } from './Router.js';
+import type { SseHub } from './SseHub.js';
 
 export type PluginClient = PluginInput['client'];
 
@@ -18,7 +15,7 @@ export type ServerContext = {
 
 export function createRoutes(
   { client, directory }: ServerContext,
-  sseHub: SSEHub,
+  sseHub: SseHub,
 ): Route[] {
   return [
     {

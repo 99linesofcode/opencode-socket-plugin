@@ -1,12 +1,8 @@
-// Socket path resolution.
-//
-// Single responsibility: turn plugin options + environment into the one path
-// the server will bind. Pure function — no I/O, no state.
-
+// Resolve the socket path: plugin option > env > XDG_RUNTIME_DIR > /tmp.
+// Pure function — no I/O, no state.
 import path from 'node:path';
 import { type PluginOptions } from '@opencode-ai/plugin';
 
-// Resolve the socket path: plugin option > env > XDG_RUNTIME_DIR > /tmp
 export function resolveSocketPath(options: PluginOptions): string {
   if (typeof options?.socketPath === 'string' && options.socketPath)
     return options.socketPath;

@@ -1,22 +1,23 @@
 // @99linesofcode/opencode-socket-plugin
 //
 // Composition root. This is the only file that knows how the pieces fit
-// together: it resolves the socket path, clears a stale socket, builds the SSE
-// hub, the route table, and the dispatcher, starts the Unix socket server, and
-// returns the event/dispose hooks. Each piece lives in its own module with a
-// single responsibility — config, socket lifecycle, HTTP mapping, routing, the
-// session API, and the SSE hub.
+// together: it resolves the socket path, clears a stale socket, builds the
+// SSE hub, the route table, and the router, starts the Unix socket server,
+// and returns the event/dispose hooks.
 //
 // NOTE: never use console.log/error in this plugin — it runs inside the TUI
 // process, so stdout writes get overlaid on the terminal UI. Use
 // client.app.log() for structured logging (goes to the log file).
 
 import { type PluginModule } from '@opencode-ai/plugin';
-import { resolveSocketPath } from './config.js';
-import { clearStaleSocket, removeSocketFile } from './socket.js';
-import { createRouter } from './router.js';
-import { createRoutes } from './routes.js';
-import { createSseHub } from './sse.js';
+import { resolveSocketPath } from './resolveSocketPath.js';
+import {
+  clearStaleSocket,
+  removeSocketFile,
+} from './socketFile.js';
+import { Router } from './Router.js';
+import { createRoutes } from './createRoutes.js';
+import { SseHub } from './SseHub.js';
 
 export const opencodeSocketPlugin: PluginModule = {
   id: 'opencode-socket-plugin',
@@ -51,9 +52,9 @@ export const opencodeSocketPlugin: PluginModule = {
       }
     }
 
-    const sseHub = createSseHub();
+    const sseHub = new SseHub();
     const routes = createRoutes({ client, directory }, sseHub);
-    const router = createRouter(routes, (message) =>
+    const router = new Router(routes, (message) =>
       client.app
         .log({
           body: { service: 'opencode-socket-plugin', level: 'error', message },
@@ -68,7 +69,7 @@ export const opencodeSocketPlugin: PluginModule = {
     // idleTimeout as undefined on the XOR union, but the runtime accepts it.
     const server = Bun.serve({
       unix: socketPath,
-      fetch: router,
+      fetch: (req: Request) => router.handle(req),
       idleTimeout: 60,
     } as unknown as Bun.Serve.Options<undefined, never>);
 
@@ -95,7 +96,7 @@ export const opencodeSocketPlugin: PluginModule = {
 };
 
 function disposeServer(
-  sseHub: ReturnType<typeof createSseHub>,
+  sseHub: SseHub,
   server: { stop(force?: boolean): void },
   socketPath: string,
 ): void {

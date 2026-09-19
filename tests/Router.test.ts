@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRouter, param, type Route } from '../src/router.js';
+import { Router, param, type Route } from '../src/Router.js';
 
 const ok = (body: unknown) => Response.json(body);
 
@@ -30,19 +30,19 @@ function routeTable(): Route[] {
   ];
 }
 
-describe('createRouter', () => {
+describe('Router', () => {
   it('returns 404 for an unknown path', async () => {
-    const router = createRouter(routeTable(), () => {});
+    const router = new Router(routeTable(), () => {});
 
-    const response = await router(new Request('http://localhost/nope'));
+    const response = await router.handle(new Request('http://localhost/nope'));
 
     expect(response.status).toBe(404);
   });
 
   it('returns 405 when the path matches but the method does not', async () => {
-    const router = createRouter(routeTable(), () => {});
+    const router = new Router(routeTable(), () => {});
 
-    const response = await router(
+    const response = await router.handle(
       new Request('http://localhost/things', { method: 'DELETE' }),
     );
 
@@ -50,17 +50,19 @@ describe('createRouter', () => {
   });
 
   it('extracts named params', async () => {
-    const router = createRouter(routeTable(), () => {});
+    const router = new Router(routeTable(), () => {});
 
-    const response = await router(new Request('http://localhost/things/ses_1'));
+    const response = await router.handle(
+      new Request('http://localhost/things/ses_1'),
+    );
 
     expect(await response.json()).toEqual({ id: 'ses_1' });
   });
 
   it('passes the parsed JSON body to POST handlers', async () => {
-    const router = createRouter(routeTable(), () => {});
+    const router = new Router(routeTable(), () => {});
 
-    const response = await router(
+    const response = await router.handle(
       new Request('http://localhost/things', {
         method: 'POST',
         body: '{"a":1}',
@@ -71,9 +73,9 @@ describe('createRouter', () => {
   });
 
   it('returns 400 on malformed JSON for POST', async () => {
-    const router = createRouter(routeTable(), () => {});
+    const router = new Router(routeTable(), () => {});
 
-    const response = await router(
+    const response = await router.handle(
       new Request('http://localhost/things', { method: 'POST', body: '{nope' }),
     );
 
@@ -82,11 +84,11 @@ describe('createRouter', () => {
 
   it('returns 500 and logs when the handler throws', async () => {
     const logged: string[] = [];
-    const router = createRouter(routeTable(), (message) => {
+    const router = new Router(routeTable(), (message) => {
       logged.push(message);
     });
 
-    const response = await router(new Request('http://localhost/boom'));
+    const response = await router.handle(new Request('http://localhost/boom'));
 
     expect(response.status).toBe(500);
     expect(logged).toHaveLength(1);

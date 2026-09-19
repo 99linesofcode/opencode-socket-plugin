@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseJsonBody, sdkResultToResponse } from '../src/http.js';
+import { sdkResultToResponse } from '../src/sdkResultToResponse.js';
 
 describe('sdkResultToResponse', () => {
   it('maps data to a 200 JSON response', async () => {
@@ -38,38 +38,5 @@ describe('sdkResultToResponse', () => {
     const response = sdkResultToResponse({ error: 'boom' });
 
     expect(response.status).toBe(500);
-  });
-});
-
-describe('parseJsonBody', () => {
-  it('accepts an empty body', async () => {
-    const parsed = await parseJsonBody(
-      new Request('http://localhost/', { method: 'POST' }),
-    );
-
-    expect(parsed).toEqual({ ok: true, body: undefined });
-  });
-
-  it('parses valid JSON', async () => {
-    const request = new Request('http://localhost/', {
-      method: 'POST',
-      body: JSON.stringify({ parts: [] }),
-    });
-
-    const parsed = await parseJsonBody(request);
-
-    expect(parsed).toEqual({ ok: true, body: { parts: [] } });
-  });
-
-  it('rejects malformed JSON with a 400', async () => {
-    const request = new Request('http://localhost/', {
-      method: 'POST',
-      body: '{nope',
-    });
-
-    const parsed = await parseJsonBody(request);
-
-    expect(parsed.ok).toBe(false);
-    if (!parsed.ok) expect(parsed.response.status).toBe(400);
   });
 });
