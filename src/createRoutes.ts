@@ -11,10 +11,14 @@ export type PluginClient = PluginInput['client'];
 export type ServerContext = {
   client: PluginClient;
   directory: string;
+  // Permission approvals let anything on the socket bypass the human gate on
+  // the agent's permission prompts. Off by default; only a trusted operator
+  // should enable it.
+  allowPermissionApprovals: boolean;
 };
 
 export function createRoutes(
-  { client, directory }: ServerContext,
+  { client, directory, allowPermissionApprovals }: ServerContext,
   sseHub: SseHub,
 ): Route[] {
   return [
@@ -121,8 +125,14 @@ export function createRoutes(
     {
       method: 'POST',
       pattern: /^\/session\/(?<id>[^/]+)\/permissions\/(?<permissionID>[^/]+)$/,
-      handler: async (params, body) =>
-        sdkResultToResponse(
+      handler: async (params, body) => {
+        if (!allowPermissionApprovals) {
+          return Response.json(
+            { error: 'permission approvals disabled' },
+            { status: 403 },
+          );
+        }
+        return sdkResultToResponse(
           await client.postSessionIdPermissionsPermissionId({
             path: {
               id: param(params, 'id'),
@@ -134,7 +144,8 @@ export function createRoutes(
               >[0]['body']
             >,
           }),
-        ),
+        );
+      },
     },
     {
       method: 'GET',

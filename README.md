@@ -66,7 +66,7 @@ curl --unix-socket /run/user/1000/opencode.sock -N http://localhost/event
 | POST | `/session/:id/prompt_async` | Send a prompt (fire-and-forget) |
 | POST | `/session/:id/command` | Run a slash command |
 | POST | `/session/:id/abort` | Abort a running session |
-| POST | `/session/:id/permissions/:permissionID` | Reply to a permission request |
+| POST | `/session/:id/permissions/:permissionID` | Reply to a permission request (disabled by default — see Configuration) |
 | GET | `/event` | SSE stream of bus events (`?session=<id>` to filter) |
 
 ## Configuration
@@ -81,12 +81,31 @@ The socket path can be set via plugin options:
 
 or via the `OPENCODE_SOCKET_PATH` environment variable.
 
+### `allowPermissionApprovals`
+
+The `POST /session/:id/permissions/:permissionID` endpoint lets anything that
+can reach the socket approve the agent's permission prompts, bypassing the
+human gate. It is **disabled by default** — the route returns `403` unless you
+opt in. Only enable it when you trust every process that can connect to the
+socket:
+
+```json
+{
+  "plugin": [["@99linesofcode/opencode-socket-plugin", { "allowPermissionApprovals": true }]]
+}
+```
+
 ## Notes
 
 - The socket lives and dies with the opencode process. No TUI/server running,
   no socket.
-- The socket is mode 0600, user-owned — filesystem permissions are the only
-  auth (same trust model as the TUI itself).
+- The plugin enforces mode `0600` (owner-only) on the socket after binding —
+  filesystem permissions are the only auth (same trust model as the TUI
+  itself).
+- When the socket falls back to `/tmp` (no `socketPath` option, no
+  `OPENCODE_SOCKET_PATH`, no `XDG_RUNTIME_DIR`), the plugin logs a warning:
+  `/tmp` is world-writable and the path is predictable, so any local user
+  could squat it. Prefer `XDG_RUNTIME_DIR` or an explicit `socketPath`.
 - Never `console.log` from this plugin — it runs inside the TUI process and
   stdout writes overlay the terminal UI. Logging goes through
   `client.app.log()`.

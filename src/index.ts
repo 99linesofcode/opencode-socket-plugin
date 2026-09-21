@@ -13,7 +13,10 @@ import { type PluginModule } from '@opencode-ai/plugin';
 import { resolveSocketPath } from './resolveSocketPath.js';
 import {
   clearStaleSocket,
+  enforceOwnerOnlyMode,
+  isTmpFallback,
   removeSocketFile,
+  verifySocketIdentity,
 } from './socketFile.js';
 import { Router } from './Router.js';
 import { createRoutes } from './createRoutes.js';
@@ -23,6 +26,20 @@ export const opencodeSocketPlugin: PluginModule = {
   id: 'opencode-socket-plugin',
   server: async ({ client, directory }, options) => {
     const socketPath = resolveSocketPath(options ?? {});
+
+    if (isTmpFallback(socketPath)) {
+      // /tmp is world-writable and the path is predictable — any local user
+      // could squat it. Warn so the operator moves to XDG_RUNTIME_DIR.
+      await client.app
+        .log({
+          body: {
+            service: 'opencode-socket-plugin',
+            level: 'warn',
+            message: `socket ${socketPath} lives in world-writable /tmp; prefer XDG_RUNTIME_DIR or an explicit socketPath`,
+          },
+        })
+        .catch(() => {});
+    }
 
     const ok = await clearStaleSocket(socketPath);
     if (!ok) {
@@ -53,7 +70,11 @@ export const opencodeSocketPlugin: PluginModule = {
     }
 
     const sseHub = new SseHub();
-    const routes = createRoutes({ client, directory }, sseHub);
+    const allowPermissionApprovals = options?.allowPermissionApprovals === true;
+    const routes = createRoutes(
+      { client, directory, allowPermissionApprovals },
+      sseHub,
+    );
     const router = new Router(routes, (message) =>
       client.app
         .log({
@@ -72,6 +93,40 @@ export const opencodeSocketPlugin: PluginModule = {
       fetch: (req: Request) => router.handle(req),
       idleTimeout: 60,
     } as unknown as Bun.Serve.Options<undefined, never>);
+
+    // Bun.serve creates the socket with umask-dependent permissions (0755
+    // under a 022 umask), which would let any local user drive the agent.
+    // Enforce 0600; if we cannot, refuse to serve rather than run exposed.
+    if (!enforceOwnerOnlyMode(socketPath)) {
+      await client.app
+        .log({
+          body: {
+            service: 'opencode-socket-plugin',
+            level: 'error',
+            message: `failed to set socket mode 0600 on ${socketPath}; refusing to serve`,
+          },
+        })
+        .catch(() => {});
+      disposeServer(sseHub, server, socketPath);
+      return {};
+    }
+
+    // Re-verify identity after binding: a squatter could have grabbed the
+    // path between our stale-socket probe and our bind. If the socket no
+    // longer answers with our health payload, tear down rather than serve.
+    if (!(await verifySocketIdentity(socketPath))) {
+      await client.app
+        .log({
+          body: {
+            service: 'opencode-socket-plugin',
+            level: 'error',
+            message: `socket ${socketPath} did not answer with our health payload; refusing to serve`,
+          },
+        })
+        .catch(() => {});
+      disposeServer(sseHub, server, socketPath);
+      return {};
+    }
 
     await client.app
       .log({
